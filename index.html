@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluwall CRM - Seguimiento</title>
+    <title>Bluwall CRM Elite</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -11,168 +11,171 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .temp-caliente { border-left: 4px solid #ef4444; }
+        .temp-tibio { border-left: 4px solid #f59e0b; }
+        .temp-frio { border-left: 4px solid #3b82f6; }
     </style>
 </head>
-<body>
+<body class="bg-[#f1f5f9]">
     <div id="root"></div>
 
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Componente para Iconos (Adaptación para Navegador)
         const Icon = ({ name, size = 16, className = "" }) => {
-            const iconRef = useRef(null);
-            useEffect(() => {
-                lucide.createIcons();
-            }, [name]);
+            useEffect(() => { lucide.createIcons(); }, [name]);
             return <i data-lucide={name} style={{width: size, height: size}} className={className}></i>;
         };
 
         const App = () => {
             const [view, setView] = useState('dashboard');
-            const [clientes, setClientes] = useState([
-                { id: 1, nombre: "Juan Pérez", telf: "555-0123", empresa: "Logística Norte", proximoSeguimiento: new Date().toISOString().split('T')[0], nota: "Interesado en muros de tablaroca.", tipo: "Contratista - Prospecto", etapa: "Contacto Inicial" },
-                { id: 2, nombre: "Arq. Maria S.", telf: "555-9876", empresa: "Diseño Urbano", proximoSeguimiento: "2024-05-20", nota: "Pidió presupuesto para 100m2 de plafón.", tipo: "Arquitecto - Prospecto", etapa: "Presupuesto" },
-            ]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [clientes, setClientes] = useState(() => {
+                const saved = localStorage.getItem('bluwall_data_v2');
+                return saved ? JSON.parse(saved) : [];
+            });
             
-            const [nuevoCliente, setNuevoCliente] = useState({ nombre: '', telf: '', nota: '', tipo: 'Prospecto - Pendiente' });
-            const [isRecording, setIsRecording] = useState(false);
+            const [editingClient, setEditingClient] = useState(null);
+            const [nuevaBitacora, setNuevaBitacora] = useState('');
+            const [nuevoCliente, setNuevoCliente] = useState({ 
+                nombre: '', telf: '', empresa: '', tipo: 'Prospecto', temperatura: 'Tibio' 
+            });
+
+            useEffect(() => {
+                localStorage.setItem('bluwall_data_v2', JSON.stringify(clientes));
+                lucide.createIcons();
+            }, [clientes]);
+
             const etapas = ["Contacto Inicial", "Presupuesto", "Negociación", "Cierre / Seguimiento"];
 
-            const calcularFechaSeguimiento = (fechaInicio = new Date(), diasAAñadir = 3) => {
-                let fecha = new Date(fechaInicio);
-                let diasContados = 0;
-                while (diasContados < diasAAñadir) {
-                    fecha.setDate(fecha.getDate() + 1);
-                    if (fecha.getDay() !== 0) diasContados++;
+            const calcularFecha = () => {
+                let d = new Date();
+                let added = 0;
+                while(added < 3) {
+                    d.setDate(d.getDate() + 1);
+                    if(d.getDay() !== 0) added++;
                 }
-                if (fecha.getDay() === 0) fecha.setDate(fecha.getDate() + 1);
-                return fecha.toISOString().split('T')[0];
+                return d.toISOString().split('T')[0];
             };
 
-            const toggleListening = () => {
-                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if (!SR) return alert("Navegador no compatible con voz");
-                const recognition = new SR();
-                recognition.lang = 'es-ES';
-                recognition.onstart = () => setIsRecording(true);
-                recognition.onend = () => setIsRecording(false);
-                recognition.onresult = (e) => {
-                    const text = e.results[0][0].transcript;
-                    setNuevoCliente(prev => ({ ...prev, nota: text, tipo: "Analizando perfil..." }));
-                    // Aquí iría tu fetch a Gemini API si tienes la Key configurada
-                    setTimeout(() => {
-                        setNuevoCliente(prev => ({ ...prev, tipo: "Contratista - Prospecto" }));
-                    }, 1500);
-                };
-                recognition.start();
+            const filtrarClientes = (lista) => {
+                return lista.filter(c => 
+                    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    (c.empresa && c.empresa.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
             };
 
             const agregarCliente = () => {
-                if (!nuevoCliente.nombre) return;
-                const nuevo = { ...nuevoCliente, id: Date.now(), proximoSeguimiento: calcularFechaSeguimiento(), etapa: "Contacto Inicial" };
+                if(!nuevoCliente.nombre) return;
+                const nuevo = { 
+                    ...nuevoCliente, 
+                    id: Date.now(), 
+                    etapa: "Contacto Inicial", 
+                    proximoSeguimiento: calcularFecha(),
+                    historial: [{ fecha: new Date().toLocaleString(), nota: "Registro inicial creado" }]
+                };
                 setClientes([...clientes, nuevo]);
-                setNuevoCliente({ nombre: '', telf: '', nota: '', tipo: 'Prospecto - Pendiente' });
+                setNuevoCliente({ nombre: '', telf: '', empresa: '', tipo: 'Prospecto', temperatura: 'Tibio' });
             };
 
-            const completarGestion = (id) => {
-                setClientes(prev => prev.map(c => c.id === id ? { ...c, proximoSeguimiento: calcularFechaSeguimiento() } : c));
+            const añadirNota = () => {
+                if(!nuevaBitacora) return;
+                const actualizado = {
+                    ...editingClient,
+                    historial: [...(editingClient.historial || []), { fecha: new Date().toLocaleString(), nota: nuevaBitacora }]
+                };
+                setClientes(clientes.map(c => c.id === editingClient.id ? actualizado : c));
+                setEditingClient(actualizado);
+                setNuevaBitacora('');
             };
 
             const hoy = new Date().toISOString().split('T')[0];
-            const seguimientosHoy = clientes.filter(c => c.proximoSeguimiento <= hoy);
+            const seguimientosHoy = filtrarClientes(clientes.filter(c => c.proximoSeguimiento <= hoy));
 
             return (
-                <div className="min-h-screen bg-[#f8fafc] text-slate-900 font-sans">
-                    <nav className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-30 shadow-sm">
-                        <div className="flex items-center gap-8">
-                            <div className="flex items-center gap-2">
-                                <div className="bg-blue-600 p-1.5 rounded-lg text-white">
-                                    <Icon name="brain-circuit" size={20} />
-                                </div>
-                                <h1 className="text-xl font-bold text-blue-900 tracking-tight">Bluwall CRM</h1>
-                            </div>
-                            <div className="flex bg-slate-100 p-1 rounded-xl">
-                                <button onClick={() => setView('dashboard')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
-                                    <Icon name="layout-dashboard" size={16} /> Hoy
-                                </button>
-                                <button onClick={() => setView('pipeline')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'pipeline' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}>
-                                    <Icon name="trello" size={16} /> Pipeline
-                                </button>
+                <div className="min-h-screen pb-10">
+                    {/* NAV & BUSCADOR */}
+                    <nav className="bg-white border-b p-4 flex flex-col md:flex-row justify-between items-center sticky top-0 z-40 shadow-sm gap-4">
+                        <div className="flex items-center gap-6 w-full md:w-auto">
+                            <h1 className="text-xl font-black text-blue-800 flex items-center gap-2">
+                                <div className="bg-blue-600 p-1 rounded text-white"><Icon name="brain-circuit"/></div> Bluwall
+                            </h1>
+                            <div className="flex bg-slate-100 p-1 rounded-lg">
+                                <button onClick={() => setView('dashboard')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${view==='dashboard'?'bg-white shadow-sm text-blue-600':'text-slate-500'}`}>Hoy</button>
+                                <button onClick={() => setView('pipeline')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${view==='pipeline'?'bg-white shadow-sm text-blue-600':'text-slate-500'}`}>Pipeline</button>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <p className="text-[10px] uppercase font-black text-slate-400">Jornada L-S</p>
-                            <p className="text-sm font-bold text-slate-600">{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric' })}</p>
+                        
+                        <div className="relative w-full md:w-96">
+                            <Icon name="search" size={16} className="absolute left-3 top-3 text-slate-400"/>
+                            <input 
+                                className="w-full bg-slate-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-blue-100" 
+                                placeholder="Buscar por nombre o empresa..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
                         </div>
                     </nav>
 
-                    <div className="p-8">
+                    <div className="p-6">
                         {view === 'dashboard' ? (
-                            <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-2 space-y-6">
-                                    <div className="flex justify-between items-end">
-                                        <div>
-                                            <h2 className="text-2xl font-black text-slate-800">Seguimiento Diario</h2>
-                                            <p className="text-slate-500 text-sm italic">Acciones prioritarias</p>
-                                        </div>
-                                        <div className="bg-blue-50 px-4 py-2 rounded-2xl border border-blue-100 flex items-center gap-3">
-                                            <span className="text-3xl font-black text-blue-600">{seguimientosHoy.length}</span>
-                                            <span className="text-[10px] leading-tight text-blue-400 font-bold uppercase">Gestiones<br/>Pendientes</span>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4">
-                                        {seguimientosHoy.map(c => (
-                                            <div key={c.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-6">
-                                                <div className={`w-1.5 h-12 rounded-full ${new Date(c.proximoSeguimiento) < new Date(hoy) ? 'bg-red-500' : 'bg-blue-500'}`}></div>
-                                                <div className="flex-1">
-                                                    <h3 className="font-bold text-lg">{c.nombre} <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded ml-2">{c.tipo}</span></h3>
-                                                    <p className="text-sm text-slate-500 italic">"{c.nota}"</p>
-                                                </div>
-                                                <button onClick={() => completarGestion(c.id)} className="bg-blue-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-100">
-                                                    <Icon name="check-circle" size={24} />
-                                                </button>
+                                    <h2 className="text-2xl font-black flex items-center gap-2">
+                                        Pendientes Hoy <span className="text-sm bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{seguimientosHoy.length}</span>
+                                    </h2>
+                                    {seguimientosHoy.map(c => (
+                                        <div key={c.id} onClick={() => setEditingClient(c)} className={`bg-white p-5 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-all flex items-center justify-between temp-${c.temperatura.toLowerCase()}`}>
+                                            <div>
+                                                <h3 className="font-bold text-slate-800">{c.nombre}</h3>
+                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">{c.empresa || 'Empresa no reg.'}</p>
                                             </div>
-                                        ))}
-                                    </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                    <p className="text-[10px] font-black text-blue-500 uppercase">{c.temperatura}</p>
+                                                    <p className="text-[9px] text-slate-400">Venció: {c.proximoSeguimiento}</p>
+                                                </div>
+                                                <div className="bg-slate-50 p-3 rounded-2xl"><Icon name="chevron-right" className="text-slate-300"/></div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
 
-                                <div className="bg-white p-8 rounded-[40px] shadow-xl border border-slate-100 h-fit">
-                                    <h3 className="text-xl font-black mb-6 flex items-center gap-2"><Icon name="plus-circle" className="text-blue-600"/> Nuevo Registro</h3>
+                                <div className="bg-white p-8 rounded-[40px] shadow-xl border border-slate-100 h-fit sticky top-24">
+                                    <h3 className="text-xl font-black mb-6">Nuevo Registro</h3>
                                     <div className="space-y-4">
-                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" placeholder="Nombre" value={nuevoCliente.nombre} onChange={e => setNuevoCliente({...nuevoCliente, nombre: e.target.value})} />
-                                        <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none" placeholder="WhatsApp" value={nuevoCliente.telf} onChange={e => setNuevoCliente({...nuevoCliente, telf: e.target.value})} />
-                                        <div className="relative">
-                                            <textarea className="w-full p-4 bg-slate-50 rounded-2xl outline-none h-32 text-sm" placeholder="Detalles del prospecto..." value={nuevoCliente.nota} onChange={e => setNuevoCliente({...nuevoCliente, nota: e.target.value})} />
-                                            <button onClick={toggleListening} className={`absolute bottom-4 right-4 p-3 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-blue-600'} text-white shadow-lg`}>
-                                                <Icon name={isRecording ? "mic-off" : "mic"} size={20} />
-                                            </button>
+                                        <input className="w-full bg-slate-50 p-3 rounded-xl outline-none" placeholder="Nombre" value={nuevoCliente.nombre} onChange={e=>setNuevoCliente({...nuevoCliente, nombre:e.target.value})}/>
+                                        <input className="w-full bg-slate-50 p-3 rounded-xl outline-none" placeholder="Empresa" value={nuevoCliente.empresa} onChange={e=>setNuevoCliente({...nuevoCliente, empresa:e.target.value})}/>
+                                        <input className="w-full bg-slate-50 p-3 rounded-xl outline-none" placeholder="WhatsApp" value={nuevoCliente.telf} onChange={e=>setNuevoCliente({...nuevoCliente, telf:e.target.value})}/>
+                                        <div>
+                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Temperatura</label>
+                                            <select className="w-full bg-slate-50 p-3 rounded-xl outline-none mt-1" value={nuevoCliente.temperatura} onChange={e=>setNuevoCliente({...nuevoCliente, temperatura:e.target.value})}>
+                                                <option value="Frio">Frio (Baja)</option>
+                                                <option value="Tibio">Tibio (Media)</option>
+                                                <option value="Caliente">Caliente (ALTA)</option>
+                                            </select>
                                         </div>
-                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Categorización Automática</p>
-                                            <p className="text-sm font-bold text-blue-800">{nuevoCliente.tipo}</p>
-                                        </div>
-                                        <button onClick={agregarCliente} disabled={!nuevoCliente.nombre} className="w-full bg-blue-700 text-white font-bold py-5 rounded-2xl shadow-lg hover:bg-blue-800 disabled:opacity-50">
-                                            Registrar e Iniciar Ciclo
-                                        </button>
+                                        <button onClick={agregarCliente} className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">Registrar Prospecto</button>
                                     </div>
                                 </div>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-[70vh]">
+                            <div className="flex gap-4 h-[75vh] overflow-x-auto pb-4 custom-scrollbar">
                                 {etapas.map(etapa => (
-                                    <div key={etapa} className="bg-slate-200/50 rounded-[32px] p-4 flex flex-col h-full overflow-hidden">
-                                        <h3 className="font-black text-slate-600 uppercase text-xs tracking-widest mb-4 px-2">{etapa}</h3>
-                                        <div className="space-y-3 overflow-y-auto custom-scrollbar">
-                                            {clientes.filter(c => c.etapa === etapa).map(c => (
-                                                <div key={c.id} className="bg-white p-4 rounded-2xl shadow-sm border border-white hover:border-blue-100 transition-all">
-                                                    <p className="font-bold text-slate-800 text-sm">{c.nombre}</p>
-                                                    <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 italic">"{c.nota}"</p>
-                                                    <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-50 text-[10px] font-bold text-blue-600">
-                                                        <span>{c.telf}</span>
-                                                        <Icon name="clock" size={10} className="text-slate-400"/>
+                                    <div key={etapa} onDragOver={e=>e.preventDefault()} onDrop={e=>{
+                                        const id = parseInt(e.dataTransfer.getData("id"));
+                                        setClientes(clientes.map(c => c.id === id ? {...c, etapa, proximoSeguimiento: calcularFecha()} : c));
+                                    }} className="bg-slate-200/50 min-w-[280px] flex-1 rounded-[32px] p-4 flex flex-col">
+                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-4 px-2 tracking-widest">{etapa}</h3>
+                                        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                                            {filtrarClientes(clientes.filter(c => c.etapa === etapa)).map(c => (
+                                                <div key={c.id} draggable onDragStart={e=>e.dataTransfer.setData("id", c.id)} onClick={()=>setEditingClient(c)} className={`bg-white p-4 rounded-2xl shadow-sm hover:shadow-md cursor-pointer transition-all temp-${c.temperatura.toLowerCase()}`}>
+                                                    <p className="font-bold text-sm text-slate-800">{c.nombre}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold">{c.empresa || 'S/E'}</p>
+                                                    <div className="mt-3 pt-3 border-t flex justify-between items-center">
+                                                        <span className="text-[10px] font-black text-blue-600">{c.telf}</span>
+                                                        <Icon name="clock" size={10} className="text-slate-300"/>
                                                     </div>
                                                 </div>
                                             ))}
@@ -182,6 +185,65 @@
                             </div>
                         )}
                     </div>
+
+                    {/* MODAL DETALLES Y LOGS */}
+                    {editingClient && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-2xl rounded-[40px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                                <div className="p-8 border-b flex justify-between items-start">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${editingClient.temperatura === 'Caliente' ? 'bg-red-100 text-red-600' : editingClient.temperatura === 'Tibio' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>{editingClient.temperatura}</span>
+                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{editingClient.etapa}</span>
+                                        </div>
+                                        <h2 className="text-2xl font-black">{editingClient.nombre}</h2>
+                                        <p className="text-slate-400 font-bold">{editingClient.empresa}</p>
+                                    </div>
+                                    <button onClick={()=>setEditingClient(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600"><Icon name="x"/></button>
+                                </div>
+                                
+                                <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8 custom-scrollbar">
+                                    <div className="space-y-6">
+                                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Información</h4>
+                                        <div className="space-y-4">
+                                            <div><label className="text-[9px] font-bold text-slate-400 uppercase">WhatsApp</label>
+                                            <input className="w-full border-b py-1 outline-none font-medium" value={editingClient.telf} onChange={e=>setEditingClient({...editingClient, telf:e.target.value})}/></div>
+                                            <div><label className="text-[9px] font-bold text-slate-400 uppercase">Temperatura</label>
+                                            <select className="w-full border-b py-1 outline-none font-medium" value={editingClient.temperatura} onChange={e=>setEditingClient({...editingClient, temperatura:e.target.value})}>
+                                                <option value="Frio">Frio</option><option value="Tibio">Tibio</option><option value="Caliente">Caliente</option>
+                                            </select></div>
+                                            <div className="flex gap-2">
+                                                <button onClick={()=>{
+                                                    setClientes(clientes.map(c=>c.id===editingClient.id ? editingClient : c));
+                                                    setEditingClient(null);
+                                                }} className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">Guardar</button>
+                                                <button onClick={()=>{
+                                                    setClientes(clientes.filter(c=>c.id!==editingClient.id));
+                                                    setEditingClient(null);
+                                                }} className="bg-red-50 text-red-400 p-3 rounded-xl"><Icon name="trash-2" size={18}/></button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4 border-l pl-8">
+                                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Bitácora de Notas</h4>
+                                        <div className="flex gap-2">
+                                            <input className="flex-1 bg-slate-50 p-2 rounded-lg text-xs outline-none" placeholder="Escribe un avance..." value={nuevaBitacora} onChange={e=>setNuevaBitacora(e.target.value)}/>
+                                            <button onClick={añadirNota} className="bg-blue-100 text-blue-600 p-2 rounded-lg"><Icon name="plus" size={16}/></button>
+                                        </div>
+                                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                            {(editingClient.historial || []).slice().reverse().map((h, i) => (
+                                                <div key={i} className="bg-slate-50 p-3 rounded-xl border-l-2 border-slate-200">
+                                                    <p className="text-[9px] font-bold text-slate-400 mb-1">{h.fecha}</p>
+                                                    <p className="text-xs text-slate-700 leading-relaxed">{h.nota}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             );
         };
