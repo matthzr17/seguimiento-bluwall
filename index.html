@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluwall CRM Elite</title>
+    <title>Bluwall CRM Elite V3</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -12,9 +12,9 @@
     <style>
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .temp-caliente { border-left: 4px solid #ef4444; }
-        .temp-tibio { border-left: 4px solid #f59e0b; }
-        .temp-frio { border-left: 4px solid #3b82f6; }
+        .temp-caliente { border-left: 6px solid #ef4444; }
+        .temp-tibio { border-left: 6px solid #f59e0b; }
+        .temp-frio { border-left: 6px solid #3b82f6; }
     </style>
 </head>
 <body class="bg-[#f1f5f9]">
@@ -31,19 +31,20 @@
         const App = () => {
             const [view, setView] = useState('dashboard');
             const [searchTerm, setSearchTerm] = useState('');
+            const [isRecording, setIsRecording] = useState(false);
             const [clientes, setClientes] = useState(() => {
-                const saved = localStorage.getItem('bluwall_data_v2');
+                const saved = localStorage.getItem('bluwall_data_v3');
                 return saved ? JSON.parse(saved) : [];
             });
             
             const [editingClient, setEditingClient] = useState(null);
             const [nuevaBitacora, setNuevaBitacora] = useState('');
             const [nuevoCliente, setNuevoCliente] = useState({ 
-                nombre: '', telf: '', empresa: '', tipo: 'Prospecto', temperatura: 'Tibio' 
+                nombre: '', telf: '', empresa: '', nota: '', temperatura: 'Tibio' 
             });
 
             useEffect(() => {
-                localStorage.setItem('bluwall_data_v2', JSON.stringify(clientes));
+                localStorage.setItem('bluwall_data_v3', JSON.stringify(clientes));
                 lucide.createIcons();
             }, [clientes]);
 
@@ -59,11 +60,18 @@
                 return d.toISOString().split('T')[0];
             };
 
-            const filtrarClientes = (lista) => {
-                return lista.filter(c => 
-                    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                    (c.empresa && c.empresa.toLowerCase().includes(searchTerm.toLowerCase()))
-                );
+            const toggleListening = () => {
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SR) return alert("Navegador no compatible con voz");
+                const recognition = new SR();
+                recognition.lang = 'es-ES';
+                recognition.onstart = () => setIsRecording(true);
+                recognition.onend = () => setIsRecording(false);
+                recognition.onresult = (e) => {
+                    const text = e.results[0][0].transcript;
+                    setNuevoCliente(prev => ({ ...prev, nota: text }));
+                };
+                recognition.start();
             };
 
             const agregarCliente = () => {
@@ -73,10 +81,10 @@
                     id: Date.now(), 
                     etapa: "Contacto Inicial", 
                     proximoSeguimiento: calcularFecha(),
-                    historial: [{ fecha: new Date().toLocaleString(), nota: "Registro inicial creado" }]
+                    historial: [{ fecha: new Date().toLocaleString(), nota: nuevoCliente.nota || "Registro inicial creado" }]
                 };
                 setClientes([...clientes, nuevo]);
-                setNuevoCliente({ nombre: '', telf: '', empresa: '', tipo: 'Prospecto', temperatura: 'Tibio' });
+                setNuevoCliente({ nombre: '', telf: '', empresa: '', nota: '', temperatura: 'Tibio' });
             };
 
             const añadirNota = () => {
@@ -90,73 +98,76 @@
                 setNuevaBitacora('');
             };
 
+            const filtrarClientes = (lista) => {
+                return lista.filter(c => 
+                    c.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                    (c.empresa && c.empresa.toLowerCase().includes(searchTerm.toLowerCase()))
+                );
+            };
+
             const hoy = new Date().toISOString().split('T')[0];
             const seguimientosHoy = filtrarClientes(clientes.filter(c => c.proximoSeguimiento <= hoy));
 
             return (
                 <div className="min-h-screen pb-10">
-                    {/* NAV & BUSCADOR */}
                     <nav className="bg-white border-b p-4 flex flex-col md:flex-row justify-between items-center sticky top-0 z-40 shadow-sm gap-4">
                         <div className="flex items-center gap-6 w-full md:w-auto">
-                            <h1 className="text-xl font-black text-blue-800 flex items-center gap-2">
+                            <h1 className="text-xl font-black text-blue-800 flex items-center gap-2 uppercase tracking-tighter">
                                 <div className="bg-blue-600 p-1 rounded text-white"><Icon name="brain-circuit"/></div> Bluwall
                             </h1>
                             <div className="flex bg-slate-100 p-1 rounded-lg">
-                                <button onClick={() => setView('dashboard')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${view==='dashboard'?'bg-white shadow-sm text-blue-600':'text-slate-500'}`}>Hoy</button>
-                                <button onClick={() => setView('pipeline')} className={`px-4 py-1.5 rounded-md text-sm font-bold ${view==='pipeline'?'bg-white shadow-sm text-blue-600':'text-slate-500'}`}>Pipeline</button>
+                                <button onClick={() => setView('dashboard')} className={`px-4 py-1.5 rounded-md text-xs font-black ${view==='dashboard'?'bg-white shadow-sm text-blue-600':'text-slate-500'}`}>HOY</button>
+                                <button onClick={() => setView('pipeline')} className={`px-4 py-1.5 rounded-md text-xs font-black ${view==='pipeline'?'bg-white shadow-sm text-blue-600':'text-slate-500'}`}>PIPELINE</button>
                             </div>
                         </div>
-                        
                         <div className="relative w-full md:w-96">
                             <Icon name="search" size={16} className="absolute left-3 top-3 text-slate-400"/>
-                            <input 
-                                className="w-full bg-slate-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-blue-100" 
-                                placeholder="Buscar por nombre o empresa..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                            />
+                            <input className="w-full bg-slate-50 border-none rounded-xl py-2.5 pl-10 pr-4 text-sm outline-none" placeholder="Buscar prospecto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
                         </div>
                     </nav>
 
                     <div className="p-6">
                         {view === 'dashboard' ? (
-                            <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 <div className="lg:col-span-2 space-y-6">
-                                    <h2 className="text-2xl font-black flex items-center gap-2">
-                                        Pendientes Hoy <span className="text-sm bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{seguimientosHoy.length}</span>
-                                    </h2>
-                                    {seguimientosHoy.map(c => (
-                                        <div key={c.id} onClick={() => setEditingClient(c)} className={`bg-white p-5 rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-all flex items-center justify-between temp-${c.temperatura.toLowerCase()}`}>
-                                            <div>
-                                                <h3 className="font-bold text-slate-800">{c.nombre}</h3>
-                                                <p className="text-xs text-slate-400 font-bold uppercase tracking-tighter">{c.empresa || 'Empresa no reg.'}</p>
-                                            </div>
-                                            <div className="flex items-center gap-4">
-                                                <div className="text-right">
-                                                    <p className="text-[10px] font-black text-blue-500 uppercase">{c.temperatura}</p>
-                                                    <p className="text-[9px] text-slate-400">Venció: {c.proximoSeguimiento}</p>
+                                    <h2 className="text-2xl font-black italic">Gestiones Prioritarias</h2>
+                                    <div className="grid gap-4">
+                                        {seguimientosHoy.length === 0 && <p className="text-slate-400 text-center py-20 bg-white rounded-3xl border-2 border-dashed">No hay seguimientos pendientes para hoy.</p>}
+                                        {seguimientosHoy.map(c => (
+                                            <div key={c.id} className={`bg-white p-5 rounded-3xl shadow-sm flex items-center justify-between temp-${c.temperatura.toLowerCase()} hover:shadow-md transition-all`}>
+                                                <div onClick={() => setEditingClient(c)} className="cursor-pointer flex-1">
+                                                    <h3 className="font-black text-slate-800">{c.nombre}</h3>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase">{c.empresa || 'Individual'}</p>
                                                 </div>
-                                                <div className="bg-slate-50 p-3 rounded-2xl"><Icon name="chevron-right" className="text-slate-300"/></div>
+                                                <div className="flex items-center gap-3">
+                                                    <a href={`https://wa.me/${c.telf}`} target="_blank" className="bg-green-100 text-green-600 p-3 rounded-2xl hover:bg-green-200 transition-colors">
+                                                        <Icon name="message-square" size={20}/>
+                                                    </a>
+                                                    <button onClick={() => setEditingClient(c)} className="bg-slate-50 p-3 rounded-2xl text-slate-400"><Icon name="chevron-right"/></button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
 
-                                <div className="bg-white p-8 rounded-[40px] shadow-xl border border-slate-100 h-fit sticky top-24">
-                                    <h3 className="text-xl font-black mb-6">Nuevo Registro</h3>
+                                <div className="bg-white p-8 rounded-[40px] shadow-xl h-fit border border-slate-100 sticky top-24">
+                                    <h3 className="text-xl font-black mb-6">Nuevo Prospecto</h3>
                                     <div className="space-y-4">
-                                        <input className="w-full bg-slate-50 p-3 rounded-xl outline-none" placeholder="Nombre" value={nuevoCliente.nombre} onChange={e=>setNuevoCliente({...nuevoCliente, nombre:e.target.value})}/>
-                                        <input className="w-full bg-slate-50 p-3 rounded-xl outline-none" placeholder="Empresa" value={nuevoCliente.empresa} onChange={e=>setNuevoCliente({...nuevoCliente, empresa:e.target.value})}/>
-                                        <input className="w-full bg-slate-50 p-3 rounded-xl outline-none" placeholder="WhatsApp" value={nuevoCliente.telf} onChange={e=>setNuevoCliente({...nuevoCliente, telf:e.target.value})}/>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Temperatura</label>
-                                            <select className="w-full bg-slate-50 p-3 rounded-xl outline-none mt-1" value={nuevoCliente.temperatura} onChange={e=>setNuevoCliente({...nuevoCliente, temperatura:e.target.value})}>
-                                                <option value="Frio">Frio (Baja)</option>
-                                                <option value="Tibio">Tibio (Media)</option>
-                                                <option value="Caliente">Caliente (ALTA)</option>
-                                            </select>
+                                        <input className="w-full bg-slate-50 p-4 rounded-2xl outline-none text-sm font-medium" placeholder="Nombre completo" value={nuevoCliente.nombre} onChange={e=>setNuevoCliente({...nuevoCliente, nombre:e.target.value})}/>
+                                        <input className="w-full bg-slate-50 p-4 rounded-2xl outline-none text-sm font-medium" placeholder="Empresa / Proyecto" value={nuevoCliente.empresa} onChange={e=>setNuevoCliente({...nuevoCliente, empresa:e.target.value})}/>
+                                        <input className="w-full bg-slate-50 p-4 rounded-2xl outline-none text-sm font-medium" placeholder="WhatsApp (10 dígitos)" value={nuevoCliente.telf} onChange={e=>setNuevoCliente({...nuevoCliente, telf:e.target.value})}/>
+                                        <div className="relative">
+                                            <textarea className="w-full bg-slate-50 p-4 rounded-2xl outline-none text-sm h-28 resize-none" placeholder="Dicta o escribe notas iniciales..." value={nuevoCliente.nota} onChange={e=>setNuevoCliente({...nuevoCliente, nota:e.target.value})}/>
+                                            <button onClick={toggleListening} className={`absolute bottom-3 right-3 p-3 rounded-full shadow-lg ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-blue-600'} text-white`}>
+                                                <Icon name={isRecording ? "mic-off" : "mic"} size={18}/>
+                                            </button>
                                         </div>
-                                        <button onClick={agregarCliente} className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all">Registrar Prospecto</button>
+                                        <select className="w-full bg-slate-50 p-4 rounded-2xl outline-none text-sm font-bold text-blue-600" value={nuevoCliente.temperatura} onChange={e=>setNuevoCliente({...nuevoCliente, temperatura:e.target.value})}>
+                                            <option value="Frio">❄️ Frío</option>
+                                            <option value="Tibio">🔥 Tibio</option>
+                                            <option value="Caliente">🚨 CALIENTE</option>
+                                        </select>
+                                        <button onClick={agregarCliente} className="w-full bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-100 hover:bg-blue-800 transition-all uppercase tracking-widest text-xs">Iniciar Seguimiento</button>
                                     </div>
                                 </div>
                             </div>
@@ -166,16 +177,19 @@
                                     <div key={etapa} onDragOver={e=>e.preventDefault()} onDrop={e=>{
                                         const id = parseInt(e.dataTransfer.getData("id"));
                                         setClientes(clientes.map(c => c.id === id ? {...c, etapa, proximoSeguimiento: calcularFecha()} : c));
-                                    }} className="bg-slate-200/50 min-w-[280px] flex-1 rounded-[32px] p-4 flex flex-col">
-                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-4 px-2 tracking-widest">{etapa}</h3>
-                                        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                                    }} className="bg-slate-200/50 min-w-[300px] flex-1 rounded-[40px] p-4 flex flex-col">
+                                        <h3 className="text-[10px] font-black uppercase text-slate-500 mb-4 px-4 tracking-widest flex justify-between items-center">
+                                            {etapa}
+                                            <span className="bg-slate-300 text-slate-600 px-2 py-0.5 rounded-full">{filtrarClientes(clientes.filter(c => c.etapa === etapa)).length}</span>
+                                        </h3>
+                                        <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
                                             {filtrarClientes(clientes.filter(c => c.etapa === etapa)).map(c => (
-                                                <div key={c.id} draggable onDragStart={e=>e.dataTransfer.setData("id", c.id)} onClick={()=>setEditingClient(c)} className={`bg-white p-4 rounded-2xl shadow-sm hover:shadow-md cursor-pointer transition-all temp-${c.temperatura.toLowerCase()}`}>
-                                                    <p className="font-bold text-sm text-slate-800">{c.nombre}</p>
-                                                    <p className="text-[10px] text-slate-400 font-bold">{c.empresa || 'S/E'}</p>
-                                                    <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                                                        <span className="text-[10px] font-black text-blue-600">{c.telf}</span>
-                                                        <Icon name="clock" size={10} className="text-slate-300"/>
+                                                <div key={c.id} draggable onDragStart={e=>e.dataTransfer.setData("id", c.id)} onClick={()=>setEditingClient(c)} className={`bg-white p-5 rounded-3xl shadow-sm cursor-grab active:cursor-grabbing hover:shadow-md transition-all temp-${c.temperatura.toLowerCase()}`}>
+                                                    <p className="font-black text-slate-800 text-sm leading-tight">{c.nombre}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">{c.empresa || 'S/E'}</p>
+                                                    <div className="mt-4 pt-3 border-t flex justify-between items-center">
+                                                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg tracking-widest">{c.telf}</span>
+                                                        <Icon name="grip-vertical" size={14} className="text-slate-300"/>
                                                     </div>
                                                 </div>
                                             ))}
@@ -186,56 +200,50 @@
                         )}
                     </div>
 
-                    {/* MODAL DETALLES Y LOGS */}
+                    {/* MODAL DE PERFIL Y BITÁCORA */}
                     {editingClient && (
-                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-2xl rounded-[40px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-                                <div className="p-8 border-b flex justify-between items-start">
+                        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-50 flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-4xl rounded-[50px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+                                <div className="p-10 border-b flex justify-between items-start bg-slate-50">
                                     <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${editingClient.temperatura === 'Caliente' ? 'bg-red-100 text-red-600' : editingClient.temperatura === 'Tibio' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>{editingClient.temperatura}</span>
-                                            <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{editingClient.etapa}</span>
-                                        </div>
-                                        <h2 className="text-2xl font-black">{editingClient.nombre}</h2>
-                                        <p className="text-slate-400 font-bold">{editingClient.empresa}</p>
+                                        <h2 className="text-3xl font-black tracking-tighter text-slate-800">{editingClient.nombre}</h2>
+                                        <p className="text-blue-600 font-black uppercase text-xs tracking-widest mt-1">{editingClient.empresa || 'CLIENTE PARTICULAR'}</p>
                                     </div>
-                                    <button onClick={()=>setEditingClient(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600"><Icon name="x"/></button>
+                                    <button onClick={()=>setEditingClient(null)} className="bg-white p-3 rounded-full shadow-sm text-slate-400 hover:text-red-500 transition-all"><Icon name="x" size={24}/></button>
                                 </div>
-                                
-                                <div className="flex-1 overflow-y-auto p-8 grid grid-cols-1 md:grid-cols-2 gap-8 custom-scrollbar">
-                                    <div className="space-y-6">
-                                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Información</h4>
-                                        <div className="space-y-4">
-                                            <div><label className="text-[9px] font-bold text-slate-400 uppercase">WhatsApp</label>
-                                            <input className="w-full border-b py-1 outline-none font-medium" value={editingClient.telf} onChange={e=>setEditingClient({...editingClient, telf:e.target.value})}/></div>
-                                            <div><label className="text-[9px] font-bold text-slate-400 uppercase">Temperatura</label>
-                                            <select className="w-full border-b py-1 outline-none font-medium" value={editingClient.temperatura} onChange={e=>setEditingClient({...editingClient, temperatura:e.target.value})}>
-                                                <option value="Frio">Frio</option><option value="Tibio">Tibio</option><option value="Caliente">Caliente</option>
-                                            </select></div>
-                                            <div className="flex gap-2">
-                                                <button onClick={()=>{
-                                                    setClientes(clientes.map(c=>c.id===editingClient.id ? editingClient : c));
-                                                    setEditingClient(null);
-                                                }} className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm">Guardar</button>
-                                                <button onClick={()=>{
-                                                    setClientes(clientes.filter(c=>c.id!==editingClient.id));
-                                                    setEditingClient(null);
-                                                }} className="bg-red-50 text-red-400 p-3 rounded-xl"><Icon name="trash-2" size={18}/></button>
+                                <div className="flex-1 overflow-y-auto p-10 grid grid-cols-1 md:grid-cols-5 gap-10 custom-scrollbar">
+                                    <div className="md:col-span-2 space-y-8">
+                                        <section className="space-y-4">
+                                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Datos de contacto</h4>
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl">
+                                                    <Icon name="phone" className="text-blue-500" size={18}/>
+                                                    <input className="bg-transparent font-bold outline-none text-sm w-full" value={editingClient.telf} onChange={e=>setEditingClient({...editingClient, telf:e.target.value})}/>
+                                                </div>
+                                                <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl">
+                                                    <Icon name="thermometer" className="text-blue-500" size={18}/>
+                                                    <select className="bg-transparent font-bold outline-none text-sm w-full" value={editingClient.temperatura} onChange={e=>setEditingClient({...editingClient, temperatura:e.target.value})}>
+                                                        <option value="Frio">Frio</option><option value="Tibio">Tibio</option><option value="Caliente">Caliente</option>
+                                                    </select>
+                                                </div>
                                             </div>
+                                        </section>
+                                        <div className="flex gap-3">
+                                            <button onClick={()=>{ setClientes(clientes.map(c=>c.id===editingClient.id ? editingClient : c)); setEditingClient(null); }} className="flex-1 bg-slate-900 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest shadow-lg">Actualizar Datos</button>
+                                            <button onClick={()=>{ setClientes(clientes.filter(c=>c.id!==editingClient.id)); setEditingClient(null); }} className="bg-red-50 text-red-500 p-4 rounded-2xl"><Icon name="trash-2"/></button>
                                         </div>
                                     </div>
-
-                                    <div className="space-y-4 border-l pl-8">
-                                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-widest">Bitácora de Notas</h4>
+                                    <div className="md:col-span-3 space-y-6">
+                                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Historial de Gestión</h4>
                                         <div className="flex gap-2">
-                                            <input className="flex-1 bg-slate-50 p-2 rounded-lg text-xs outline-none" placeholder="Escribe un avance..." value={nuevaBitacora} onChange={e=>setNuevaBitacora(e.target.value)}/>
-                                            <button onClick={añadirNota} className="bg-blue-100 text-blue-600 p-2 rounded-lg"><Icon name="plus" size={16}/></button>
+                                            <input className="flex-1 bg-slate-50 p-4 rounded-2xl text-sm outline-none border-2 border-transparent focus:border-blue-100 transition-all" placeholder="Agregar nota de avance..." value={nuevaBitacora} onChange={e=>setNuevaBitacora(e.target.value)}/>
+                                            <button onClick={añadirNota} className="bg-blue-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-100"><Icon name="plus"/></button>
                                         </div>
-                                        <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
                                             {(editingClient.historial || []).slice().reverse().map((h, i) => (
-                                                <div key={i} className="bg-slate-50 p-3 rounded-xl border-l-2 border-slate-200">
-                                                    <p className="text-[9px] font-bold text-slate-400 mb-1">{h.fecha}</p>
-                                                    <p className="text-xs text-slate-700 leading-relaxed">{h.nota}</p>
+                                                <div key={i} className="bg-slate-50 p-5 rounded-[2rem] border-l-4 border-blue-500 relative">
+                                                    <p className="text-[10px] font-black text-slate-300 mb-2">{h.fecha}</p>
+                                                    <p className="text-sm text-slate-600 font-medium leading-relaxed italic">"{h.nota}"</p>
                                                 </div>
                                             ))}
                                         </div>
